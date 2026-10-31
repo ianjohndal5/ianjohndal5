@@ -3,6 +3,15 @@
   <img src="assets/hero-light.svg" alt="Ian Dal. Software developer: web apps, dev tools, computer vision and game mods. Fast with AI. Careful with anything irreversible." width="100%">
 </picture>
 
+<a href="https://ianjohndal.onrender.com/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/portfolio-dark.svg">
+    <img src="assets/portfolio-light.svg" alt="Portfolio: ianjohndal.onrender.com, my personal site with a built-in AI chatbot" width="100%">
+  </picture>
+</a>
+
+<sub><a href="https://ianjohndal.onrender.com/">Visit the site</a> · <a href="https://github.com/ianjohndal5/PortfoliowithChatbot">View the source</a></sub>
+
 > [!TIP]
 > **AI-assisted, human-reviewed.** I use AI coding tools to ship more, faster: scaffolding, refactors, debugging and documentation. Every change still gets my review before it lands.
 
@@ -11,7 +20,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/parts-dark.svg">
-  <img src="assets/parts-light.svg" alt="Stack: C#, .NET, TypeScript, JavaScript, Python, OpenCV, SQLite, Tailwind, Raspberry Pi, Git, Arch Linux, AI coding tools" width="100%">
+  <img src="assets/parts-light.svg" alt="Stack: C#, .NET, TypeScript, React, Python, OpenCV, SQLite, Tailwind, Raspberry Pi, JavaScript, Arch Linux, AI coding tools" width="100%">
 </picture>
 
 <picture>

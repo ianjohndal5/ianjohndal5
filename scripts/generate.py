@@ -3,6 +3,7 @@
 
 Writes, for both GitHub themes (dark and light):
   assets/hero-*.svg       name, role, tagline and title block
+  assets/portfolio-*.svg  link card for the portfolio site
   assets/parts-*.svg      the stack, drawn as a parts list
   assets/languages-*.svg  language-share gauges, from public repos
 
@@ -30,11 +31,15 @@ ROLE = "Software developer — web apps, dev tools, computer vision & game mods"
 TAGLINE = "Fast with AI. Careful with anything irreversible."
 TITLE_BLOCK = [("AUTHOR", "Ian Dal"), ("OS", "Arch Linux"), ("REV", datetime.date.today().strftime("%Y.%m"))]
 
+PORTFOLIO_HOST = "ianjohndal.onrender.com"
+PORTFOLIO_DESC = "My personal site, with a built-in AI chatbot"
+PORTFOLIO_STACK = "REACT · TYPESCRIPT · VITE · TAILWIND · FLOWISE"
+
 # (skillicons.dev id, label). None draws a built-in sparkle instead of an icon.
 PARTS = [
-    ("cs", "C#"), ("dotnet", ".NET"), ("ts", "TypeScript"), ("js", "JavaScript"),
+    ("cs", "C#"), ("dotnet", ".NET"), ("ts", "TypeScript"), ("react", "React"),
     ("py", "Python"), ("opencv", "OpenCV"), ("sqlite", "SQLite"), ("tailwind", "Tailwind"),
-    ("raspberrypi", "Raspberry Pi"), ("git", "Git"), ("arch", "Arch Linux"), (None, "AI coding tools"),
+    ("raspberrypi", "Raspberry Pi"), ("js", "JavaScript"), ("arch", "Arch Linux"), (None, "AI coding tools"),
 ]
 
 TOP_N = 6
@@ -203,6 +208,41 @@ def hero_svg(t):
     return sheet(t, h, "SHEET 01 — PROFILE", f"{NAME}. {ROLE}. {TAGLINE}", "\n".join(f"  {b}" for b in body))
 
 
+def portfolio_svg(t):
+    h = 150
+    body = [
+        text(30, 88, f"{PORTFOLIO_HOST} ↗", t, size=26, family=SANS, weight=700, delay=0.15),
+        text(30, 113, PORTFOLIO_DESC, t, size=14, family=SANS, color=t["muted"], delay=0.35),
+        text(30, 132, PORTFOLIO_STACK, t, size=10, color=t["accent"], spacing=1.5, delay=0.5),
+    ]
+
+    # Wireframe of a web page with a chat widget, right side.
+    x0, y0, x1, y1 = 598, 24, 812, 128
+    body += [
+        draw([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)], t, 0.1, 0.9),
+        draw([(x0, y0 + 16), (x1, y0 + 16)], t, 0.5, 0.4, width=1, opacity=0.7),
+        draw([(x0 + 42, y0 + 4), (x1 - 10, y0 + 4), (x1 - 10, y0 + 12), (x0 + 42, y0 + 12), (x0 + 42, y0 + 4)],
+             t, 0.6, 0.4, width=1, opacity=0.6),
+        draw([(x0 + 14, y0 + 32), (x0 + 96, y0 + 32)], t, 0.7, 0.3, width=4),
+        draw([(x0 + 14, y0 + 46), (x0 + 120, y0 + 46)], t, 0.8, 0.3, width=2, opacity=0.5),
+        draw([(x0 + 14, y0 + 55), (x0 + 108, y0 + 55)], t, 0.85, 0.3, width=2, opacity=0.5),
+        draw([(x0 + 14, y0 + 68), (x0 + 96, y0 + 68), (x0 + 96, y0 + 94), (x0 + 14, y0 + 94), (x0 + 14, y0 + 68)],
+             t, 0.9, 0.4, width=1, opacity=0.6),
+        draw([(x0 + 14, y0 + 68), (x0 + 96, y0 + 94)], t, 1.0, 0.3, width=1, opacity=0.35),
+        draw([(x0 + 96, y0 + 68), (x0 + 14, y0 + 94)], t, 1.0, 0.3, width=1, opacity=0.35),
+    ]
+    dots = "".join(f'<circle cx="{x0 + 9 + 9 * k}" cy="{y0 + 8}" r="2.5" fill="{t["line"]}" fill-opacity="0.7"/>'
+                   for k in range(3))
+    bx, by = x1 - 98, y1 - 50
+    bubble = (f'<rect x="{bx}" y="{by}" width="62" height="24" rx="8" fill="{t["bg"]}" stroke="{t["accent"]}" stroke-width="1.4"/>'
+              + "".join(f'<circle cx="{bx + 19 + 12 * k}" cy="{by + 12}" r="2.5" fill="{t["accent"]}"/>' for k in range(3))
+              + f'<circle cx="{x1 - 18}" cy="{y1 - 16}" r="9" fill="{t["accent"]}"/>')
+    body += [f"<g>{dots}{fade(0.5, 0.4)}</g>", f"<g>{bubble}{fade(1.15, 0.5)}</g>"]
+
+    aria = f"Portfolio: {PORTFOLIO_HOST}. {PORTFOLIO_DESC}. Built with React, TypeScript, Vite, Tailwind and Flowise."
+    return sheet(t, h, "DETAIL A — PORTFOLIO", aria, "\n".join(f"  {b}" for b in body))
+
+
 def parts_svg(t):
     cols, col_w, chip_w, chip_h, row_h, top = 4, 197, 185, 36, 44, 58
     rows = (len(PARTS) + cols - 1) // cols
@@ -266,6 +306,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     for name, theme in THEMES.items():
         (OUT / f"hero-{name}.svg").write_text(hero_svg(theme), encoding="utf-8")
+        (OUT / f"portfolio-{name}.svg").write_text(portfolio_svg(theme), encoding="utf-8")
         (OUT / f"parts-{name}.svg").write_text(parts_svg(theme), encoding="utf-8")
     try:
         totals = language_totals()
