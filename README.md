@@ -10,8 +10,8 @@ I build web apps in C# and .NET, developer tools in TypeScript, computer-vision 
 | [**AGABAY: Pocket Classroom**](https://github.com/ianjohndal5/Poject-AGABAY-Pocket-Classroom) | Offline learning platform that runs on a Raspberry Pi Zero 2 W. Searchable PDF knowledge base, an assistant that answers questions from those PDFs, and a live classroom where teachers share materials with students on the same network. | Python · JavaScript |
 | [**3D Environmental Scanner**](https://github.com/ianjohndal5/3d-visualization-experiment) | Camera-to-3D pipeline in five stages: capture and calibration, depth estimation, reconstruction, then visualisation and export. Runs on CPU, no CUDA needed. | Python · OpenCV |
 | [**Paint Wheel**](https://github.com/ianjohndal5/PaintWheel) | Client-side tModLoader mod for Terraria. Right-click with a paint tool to open a colour wheel, flick to a paint, and keep painting without shuffling your inventory. | C# · tModLoader |
-| [**LendSpace**](https://github.com/ianjohndal5/LendSpace) | Community facility management app with admin, staff and user roles: reservations, billing, service requests, events, announcements, notifications and reviews. | C# · Blazor · EF Core |
-| [**HomeOwners**](https://github.com/ianjohndal5/HomeOwners) | Homeowners' association portal for billing, facility booking, events, announcements and a community forum. | C# · ASP.NET Core MVC · EF Core |
+| [**LendSpace**](https://github.com/ianjohndal5/LendSpace) | Team project. Facility booking and community app for residents, staff and admins: bookings go through staff approval, plus billing, service requests, reviews, notifications and an admin dashboard. I built the interface for all three roles. | C# · Blazor · EF Core · Tailwind |
+| [**HomeOwners**](https://github.com/ianjohndal5/HomeOwners) | Team project, and the first version of LendSpace. Homeowners' association portal with sign-in, facility search and billing. I built the landing page and the resident pages. | C# · ASP.NET Core MVC · Tailwind |
 
 ## Tools I use
 
