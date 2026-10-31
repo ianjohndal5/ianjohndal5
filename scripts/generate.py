@@ -1,38 +1,60 @@
 #!/usr/bin/env python3
-"""Build the SVGs used by the profile README.
+"""Build the blueprint-style SVG panels used by the profile README.
 
-Writes, for both GitHub themes:
-  assets/header-{dark,light}.svg     animated typing headline
-  assets/languages-{dark,light}.svg  language-share rings, from public repos
+Writes, for both GitHub themes (dark and light):
+  assets/hero-*.svg       name, role, tagline and title block
+  assets/parts-*.svg      the stack, drawn as a parts list
+  assets/languages-*.svg  language-share gauges, from public repos
 
 Usage: python3 scripts/generate.py
 Env:   GH_USER (default ianjohndal5), GITHUB_TOKEN (optional; raises the API rate limit)
 """
 
+import base64
+import datetime
 import json
+import math
 import os
 import urllib.request
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 USER = os.environ.get("GH_USER", "ianjohndal5")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 OUT = Path(__file__).resolve().parent.parent / "assets"
 
+# ---- Content -----------------------------------------------------------------
+
+NAME = "Ian Dal"
+ROLE = "Software developer — web apps, dev tools, computer vision & game mods"
+TAGLINE = "Fast with AI. Careful with anything irreversible."
+TITLE_BLOCK = [("AUTHOR", "Ian Dal"), ("OS", "Arch Linux"), ("REV", datetime.date.today().strftime("%Y.%m"))]
+
+# (skillicons.dev id, label). None draws a built-in sparkle instead of an icon.
+PARTS = [
+    ("cs", "C#"), ("dotnet", ".NET"), ("ts", "TypeScript"), ("js", "JavaScript"),
+    ("py", "Python"), ("opencv", "OpenCV"), ("sqlite", "SQLite"), ("tailwind", "Tailwind"),
+    ("raspberrypi", "Raspberry Pi"), ("git", "Git"), ("arch", "Arch Linux"), (None, "AI coding tools"),
+]
+
 TOP_N = 6
 SKIP_REPOS = {USER}              # the profile repo itself
 SKIP_LANGUAGES = set()           # e.g. {"HTML", "CSS"} to count only programming languages
 
-HEADLINE = "am i gonna be a programmer?"
-SUBTITLE = "hi, i'm ian  ·  web apps  ·  dev tools  ·  game mods"
+# ---- Look --------------------------------------------------------------------
 
+W = 840
+SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif"
 MONO = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'DejaVu Sans Mono', monospace"
 
 THEMES = {
-    "dark": dict(bg="#161b22", border="#30363d", fg="#e6edf3", muted="#8b949e", accent="#a371f7", track="#30363d"),
-    "light": dict(bg="#ffffff", border="#d0d7de", fg="#1f2328", muted="#59636e", accent="#8250df", track="#eaeef2"),
+    "dark": dict(bg="#0b1a2e", line="#58a6ff", fg="#e6edf3", muted="#8ba3c7", accent="#79c0ff",
+                 chip="#0f2340", track="#1c3352", minor=0.06, major=0.13, icons="dark"),
+    "light": dict(bg="#f6f9fd", line="#0969da", fg="#1f2328", muted="#57606a", accent="#0969da",
+                  chip="#ffffff", track="#dbe6f3", minor=0.06, major=0.12, icons="light"),
 }
 
-# Colours from GitHub Linguist, so the rings match the language bars on repo pages.
+# Colours from GitHub Linguist, so the gauges match the language bars on repo pages.
 LANG_COLORS = {
     "C#": "#178600", "TypeScript": "#3178c6", "JavaScript": "#f1e05a", "Python": "#3572A5",
     "HTML": "#e34c26", "CSS": "#663399", "SCSS": "#c6538c", "PHP": "#4F5D95", "Shell": "#89e051",
@@ -42,19 +64,21 @@ LANG_COLORS = {
     "Tree-sitter Query": "#8ea64c", "GDScript": "#355570", "Swift": "#F05138", "Ruby": "#701516",
 }
 
+# ---- Data --------------------------------------------------------------------
 
-def api(path):
-    req = urllib.request.Request(f"https://api.github.com{path}", headers={"Accept": "application/vnd.github+json"})
-    if TOKEN:
+
+def fetch(url, accept="application/vnd.github+json"):
+    req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": f"{USER}-profile"})
+    if TOKEN and url.startswith("https://api.github.com"):
         req.add_header("Authorization", f"Bearer {TOKEN}")
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.load(resp)
+        return resp.read()
 
 
 def language_totals():
     repos, page = [], 1
     while True:
-        batch = api(f"/users/{USER}/repos?per_page=100&type=owner&page={page}")
+        batch = json.loads(fetch(f"https://api.github.com/users/{USER}/repos?per_page=100&type=owner&page={page}"))
         repos += batch
         if len(batch) < 100:
             break
@@ -63,90 +87,194 @@ def language_totals():
     for repo in repos:
         if repo["fork"] or repo["name"] in SKIP_REPOS:
             continue
-        for lang, size in api(f"/repos/{USER}/{repo['name']}/languages").items():
+        langs = json.loads(fetch(f"https://api.github.com/repos/{USER}/{repo['name']}/languages"))
+        for lang, size in langs.items():
             if lang not in SKIP_LANGUAGES:
                 totals[lang] = totals.get(lang, 0) + size
     return totals
 
 
-def header_svg(t):
-    w, h, size = 800, 128, 30
-    char_w = size * 0.6
-    text_w = len(HEADLINE) * char_w
-    x0 = (w - text_w) / 2
-    lead, typing = 0.4, 2.2               # seconds before typing starts, typing duration
-    total = lead + typing
-    steps = [round(i * char_w, 2) for i in range(len(HEADLINE) + 1)]
-    # Hold at 0 during the lead-in, then reveal one character per step. The base
-    # attributes hold the final state, so static renderers show the full text.
-    widths = ";".join(["0"] + [str(s) for s in steps])
-    cursor_x = ";".join([str(round(x0 + 2, 2))] + [str(round(x0 + s + 2, 2)) for s in steps])
-    key_times = ";".join(["0"] + [f"{(lead + typing * i / len(HEADLINE)) / total:.4f}" for i in range(len(HEADLINE) + 1)])
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" aria-label="{HEADLINE}">
-  <title>{HEADLINE}</title>
+def icon_data_uri(icon_id, theme):
+    """Inline the icon so the SVG needs no network access when GitHub renders it."""
+    try:
+        svg = fetch(f"https://skillicons.dev/icons?i={icon_id}&theme={theme}", accept="image/svg+xml")
+    except OSError:
+        return None
+    return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
+
+# ---- Drawing helpers -----------------------------------------------------------
+# Every animation holds its final state in the base attributes, so renderers
+# that ignore animation still show the finished drawing.
+
+
+def fade(delay, dur=0.6):
+    return (f'<animate attributeName="opacity" values="0;0;1" keyTimes="0;{delay / (delay + dur):.4f};1" '
+            f'dur="{delay + dur:.2f}s" fill="freeze"/>')
+
+
+def draw(points, t, delay, dur=0.8, width=1.4, opacity=1.0, dash=None, color=None):
+    """A polyline that draws itself in. Dashed lines fade in instead."""
+    length = sum(math.dist(points[i], points[i + 1]) for i in range(len(points) - 1))
+    pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+    stroke = color or t["line"]
+    if dash:
+        return (f'<polyline points="{pts}" fill="none" stroke="{stroke}" stroke-width="{width}" '
+                f'stroke-opacity="{opacity}" stroke-dasharray="{dash}">{fade(delay, dur)}</polyline>')
+    return (f'<polyline points="{pts}" fill="none" stroke="{stroke}" stroke-width="{width}" stroke-opacity="{opacity}" '
+            f'stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="{length:.1f}">'
+            f'<animate attributeName="stroke-dashoffset" values="{length:.1f};{length:.1f};0" '
+            f'keyTimes="0;{delay / (delay + dur):.4f};1" dur="{delay + dur:.2f}s" fill="freeze"/></polyline>')
+
+
+def text(x, y, content, t, size=12, color=None, family=MONO, weight=400, anchor="start", spacing=0, delay=None):
+    anim = fade(delay) if delay is not None else ""
+    ls = f' letter-spacing="{spacing}"' if spacing else ""
+    return (f'<text x="{x}" y="{y}" font-family="{family}" font-size="{size}" font-weight="{weight}" '
+            f'fill="{color or t["fg"]}" text-anchor="{anchor}"{ls} xml:space="preserve">{escape(content)}{anim}</text>')
+
+
+def sheet(t, h, label, aria, body):
+    """Grid-paper panel with a drawing border, corner marks and a sheet label."""
+    x0, y0, x1, y1 = 10, 10, W - 10, h - 10
+    marks = []
+    for cx, cy, dx, dy in ((x0, y0, 1, 1), (x1, y0, -1, 1), (x0, y1, 1, -1), (x1, y1, -1, -1)):
+        marks.append(f'<polyline points="{cx + 14 * dx},{cy} {cx},{cy} {cx},{cy + 14 * dy}" fill="none" '
+                     f'stroke="{t["accent"]}" stroke-width="2"/>')
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{h}" viewBox="0 0 {W} {h}" role="img" aria-label="{escape(aria)}">
+  <title>{escape(aria)}</title>
   <defs>
-    <clipPath id="type">
-      <rect x="{x0}" y="10" height="60" width="{text_w}">
-        <animate attributeName="width" values="{widths}" keyTimes="{key_times}" dur="{total}s" calcMode="discrete" fill="freeze"/>
-      </rect>
-    </clipPath>
+    <pattern id="minor" width="12" height="12" patternUnits="userSpaceOnUse" x="{x0}" y="{y0}">
+      <path d="M12 0.5H0.5V12" fill="none" stroke="{t['line']}" stroke-opacity="{t['minor']}"/>
+    </pattern>
+    <pattern id="major" width="60" height="60" patternUnits="userSpaceOnUse" x="{x0}" y="{y0}">
+      <path d="M60 0.5H0.5V60" fill="none" stroke="{t['line']}" stroke-opacity="{t['major']}"/>
+    </pattern>
   </defs>
-  <text x="{x0}" y="56" textLength="{text_w}" lengthAdjust="spacing" clip-path="url(#type)"
-        font-family="{MONO}" font-size="{size}" font-weight="600" fill="{t['accent']}">{HEADLINE}</text>
-  <rect x="{x0 + text_w + 2}" y="30" width="3" height="34" fill="{t['accent']}">
-    <animate attributeName="x" values="{cursor_x}" keyTimes="{key_times}" dur="{total}s" calcMode="discrete" fill="freeze"/>
-    <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.5;0.5;1" dur="1.05s" repeatCount="indefinite"/>
-  </rect>
-  <text x="{w / 2}" y="104" text-anchor="middle" font-family="{MONO}" font-size="15" fill="{t['muted']}" xml:space="preserve">{SUBTITLE}<animate attributeName="opacity" values="0;0;1" keyTimes="0;{total / (total + 0.8):.4f};1" dur="{total + 0.8}s" fill="freeze"/></text>
+  <rect x="0.5" y="0.5" width="{W - 1}" height="{h - 1}" rx="6" fill="{t['bg']}" stroke="{t['line']}" stroke-opacity="0.45"/>
+  <rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" fill="url(#minor)"/>
+  <rect x="{x0}" y="{y0}" width="{x1 - x0}" height="{y1 - y0}" fill="url(#major)" stroke="{t['line']}" stroke-opacity="0.3"/>
+  {''.join(marks)}
+  {text(30, 40, label, t, size=11, color=t['muted'], spacing=2)}
+{body}
 </svg>
 """
+
+# ---- Panels --------------------------------------------------------------------
+
+
+def hero_svg(t):
+    h = 250
+    body = [
+        text(28, 110, NAME, t, size=48, family=SANS, weight=700, delay=0.15),
+        text(30, 144, ROLE, t, size=16, family=SANS, color=t["muted"], delay=0.4),
+        draw([(30, 166), (92, 166)], t, 0.55, 0.5, width=3, color=t["accent"]),
+        text(30, 198, TAGLINE, t, size=15, color=t["accent"], weight=600, delay=0.75),
+    ]
+
+    # Line-drawn cube with a centre line and a dimension line, top right.
+    cx, cy, s = 700, 78, 42
+    a, b = s * math.cos(math.radians(30)), s / 2
+    T0, T1, T2, T3 = (cx, cy - 2 * b), (cx + a, cy - b), (cx, cy), (cx - a, cy - b)
+    B1, B2, B3 = (cx + a, cy - b + s), (cx, cy + s), (cx - a, cy - b + s)
+    body += [
+        draw([(cx, 22), (cx, 160)], t, 0.1, 0.6, width=1, opacity=0.45, dash="8 4 2 4"),
+        draw([T0, T1, T2, T3, T0], t, 0.2),
+        draw([T3, B3, B2, B1, T1], t, 0.45),
+        draw([T2, B2], t, 0.7, 0.4),
+        draw([(cx - a, 128), (cx - a, 142)], t, 0.85, 0.2, width=1, opacity=0.7),
+        draw([(cx + a, 128), (cx + a, 142)], t, 0.85, 0.2, width=1, opacity=0.7),
+        draw([(cx - a, 135), (cx + a, 135)], t, 0.95, 0.4, width=1, opacity=0.7),
+        text(cx, 152, "1 : 1", t, size=10, color=t["muted"], anchor="middle", delay=1.1),
+    ]
+
+    # Title block, bottom right, like the corner of an engineering drawing.
+    widths = [104, 108, 84]
+    bx, by, bh = W - 20 - sum(widths), 168, 58
+    cells = [f'<rect x="{bx}" y="{by}" width="{sum(widths)}" height="{bh}" fill="{t["bg"]}" stroke="{t["line"]}" stroke-opacity="0.6"/>']
+    x = bx
+    for i, ((label, value), w) in enumerate(zip(TITLE_BLOCK, widths)):
+        if i:
+            cells.append(f'<line x1="{x}" y1="{by}" x2="{x}" y2="{by + bh}" stroke="{t["line"]}" stroke-opacity="0.6"/>')
+        cells.append(text(x + 10, by + 19, label, t, size=9, color=t["muted"], spacing=1.5))
+        cells.append(text(x + 10, by + 43, value, t, size=13))
+        x += w
+    body.append(f'  <g>{"".join(cells)}{fade(1.0)}</g>')
+
+    return sheet(t, h, "SHEET 01 — PROFILE", f"{NAME}. {ROLE}. {TAGLINE}", "\n".join(f"  {b}" for b in body))
+
+
+def parts_svg(t):
+    cols, col_w, chip_w, chip_h, row_h, top = 4, 197, 185, 36, 44, 58
+    rows = (len(PARTS) + cols - 1) // cols
+    h = top + rows * row_h + 18
+    x_start = (W - cols * col_w) / 2 + (col_w - chip_w) / 2
+    body = []
+    for i, (icon_id, label) in enumerate(PARTS):
+        x = x_start + (i % cols) * col_w
+        y = top + (i // cols) * row_h
+        icon = icon_data_uri(icon_id, t["icons"]) if icon_id else None
+        if icon:
+            glyph = f'<image x="{x + 8}" y="{y + 7}" width="22" height="22" href="{icon}"/>'
+        else:  # sparkle for AI tools, or a fallback if the icon could not be fetched
+            gx, gy = x + 19, y + 18
+            glyph = (f'<path d="M{gx} {gy - 10} Q{gx} {gy} {gx + 10} {gy} Q{gx} {gy} {gx} {gy + 10} '
+                     f'Q{gx} {gy} {gx - 10} {gy} Q{gx} {gy} {gx} {gy - 10}Z" fill="{t["accent"]}"/>')
+        body.append(
+            f'  <g><rect x="{x}" y="{y}" width="{chip_w}" height="{chip_h}" rx="4" fill="{t["chip"]}" '
+            f'stroke="{t["line"]}" stroke-opacity="0.35"/>{glyph}'
+            f'{text(x + 40, y + 23, f"{i + 1:02d}", t, size=10, color=t["muted"])}'
+            f'{text(x + 62, y + 23, label, t, size=13)}{fade(0.1 + 0.05 * i, 0.4)}</g>')
+    return sheet(t, h, "FIG. 01 — PARTS LIST", "Stack: " + ", ".join(p[1] for p in PARTS), "\n".join(body))
 
 
 def languages_svg(t, top, total):
-    cols, cell_w, w = 3, 170, 540
-    rows = (len(top) + cols - 1) // cols
-    r, stroke = 40, 9
-    circ = 2 * 3.14159265 * r
-    row_h, top_pad = 142, 104
-    h = top_pad + (rows - 1) * row_h + 112
-    x_start = (w - cols * cell_w) / 2 + cell_w / 2
-    parts = []
+    h, cell, cy, r = 228, 132, 112, 38
+    x_start = (W - len(top) * cell) / 2 + cell / 2
+    circ = 2 * math.pi * r
+    body = []
     for i, (lang, size) in enumerate(top):
-        cx = x_start + (i % cols) * cell_w
-        cy = top_pad + (i // cols) * row_h
+        cx = x_start + i * cell
         pct = size / total * 100
         arc = circ * pct / 100
         color = LANG_COLORS.get(lang, t["muted"])
+        ticks = []
+        for k in range(60):
+            ang = math.radians(k * 6 - 90)
+            r0 = 44 if k % 5 == 0 else 46
+            ticks.append(f"M{cx + r0 * math.cos(ang):.1f} {cy + r0 * math.sin(ang):.1f}"
+                         f"L{cx + 50 * math.cos(ang):.1f} {cy + 50 * math.sin(ang):.1f}")
         delay, dur = 0.15 * i, 1.1
         hold = delay / (delay + dur)
-        parts.append(f"""  <g>
-    <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{t['track']}" stroke-width="{stroke}"/>
-    <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{color}" stroke-width="{stroke}" stroke-linecap="round"
-            stroke-dasharray="{arc:.2f} {circ:.2f}" transform="rotate(-90 {cx} {cy})">
+        body.append(f"""  <g>
+    <path d="{''.join(ticks)}" stroke="{t['line']}" stroke-opacity="0.35" stroke-width="1"/>
+    <circle cx="{cx:.1f}" cy="{cy}" r="{r}" fill="none" stroke="{t['track']}" stroke-width="7"/>
+    <circle cx="{cx:.1f}" cy="{cy}" r="{r}" fill="none" stroke="{color}" stroke-width="7"
+            stroke-dasharray="{arc:.2f} {circ:.2f}" transform="rotate(-90 {cx:.1f} {cy})">
       <animate attributeName="stroke-dasharray" values="0 {circ:.2f};0 {circ:.2f};{arc:.2f} {circ:.2f}" keyTimes="0;{hold:.4f};1"
                dur="{delay + dur:.2f}s" calcMode="spline" keySplines="0 0 1 1;0.2 0.7 0.3 1" fill="freeze"/>
     </circle>
-    <text x="{cx}" y="{cy + 6}" text-anchor="middle" font-family="{MONO}" font-size="16" font-weight="700" fill="{t['fg']}">{pct:.1f}%</text>
-    <text x="{cx}" y="{cy + r + 28}" text-anchor="middle" font-family="{MONO}" font-size="13" fill="{t['muted']}">{lang}</text>
+    {text(f"{cx:.1f}", cy + 6, f"{pct:.1f}%", t, size=16, weight=700, anchor="middle")}
+    {text(f"{cx:.1f}", cy + r + 30, lang.upper(), t, size=11, color=t['muted'], anchor="middle", spacing=1.2)}
   </g>""")
-    label = ", ".join(f"{lang} {size / total * 100:.1f}%" for lang, size in top)
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" role="img" aria-label="Most used languages: {label}">
-  <title>Most used languages: {label}</title>
-  <rect x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="6" fill="{t['bg']}" stroke="{t['border']}"/>
-  <text x="24" y="34" font-family="{MONO}" font-size="14" font-weight="600" fill="{t['accent']}">most used languages</text>
-{chr(10).join(parts)}
-  <text x="{w - 24}" y="{h - 16}" text-anchor="end" font-family="{MONO}" font-size="11" fill="{t['muted']}">share of code across public repos</text>
-</svg>
-"""
+    body.append("  " + text(W - 30, h - 22, "bytes of code across public repos · updated daily", t,
+                            size=10, color=t["muted"], anchor="end"))
+    aria = "Language share: " + ", ".join(f"{lang} {size / total * 100:.1f}%" for lang, size in top)
+    return sheet(t, h, "FIG. 02 — LANGUAGE SHARE", aria, "\n".join(body))
 
 
 def main():
     OUT.mkdir(exist_ok=True)
-    totals = language_totals()
+    for name, theme in THEMES.items():
+        (OUT / f"hero-{name}.svg").write_text(hero_svg(theme), encoding="utf-8")
+        (OUT / f"parts-{name}.svg").write_text(parts_svg(theme), encoding="utf-8")
+    try:
+        totals = language_totals()
+    except OSError as err:  # rate limit or network trouble: keep the last good panel
+        print(f"Skipping language panel, GitHub API unavailable: {err}")
+        return
     total = sum(totals.values())
     top = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:TOP_N]
     for name, theme in THEMES.items():
-        (OUT / f"header-{name}.svg").write_text(header_svg(theme), encoding="utf-8")
         (OUT / f"languages-{name}.svg").write_text(languages_svg(theme, top, total), encoding="utf-8")
     for lang, size in top:
         print(f"{lang:<12} {size / total * 100:5.1f}%")
